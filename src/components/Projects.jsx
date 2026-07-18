@@ -14,7 +14,7 @@ export default function Projects() {
     },
     {
       id: 2,
-      title: 'Metis – AI-Powered Recruitment Platform',
+      title: 'Metis - AI-Powered Recruitment Platform',
       category: 'AI & Web',
       description: 'Automates candidate evaluation via resume parsing (30%) and live contextual AI interviews (70%) with WebSocket-based voice/text support and leaderboard analytics. Includes role-based portals for candidates and HR.',
       tech: ['Next.js', 'TypeScript', 'Tailwind CSS', 'Flask', 'MongoDB', 'Socket.IO', 'Groq API', 'LangGraph', 'Docker'],
@@ -22,7 +22,7 @@ export default function Projects() {
     },
     {
       id: 3,
-      title: 'Charaka Vaidya – Ayurvedic AI Assistant',
+      title: 'Charaka Vaidya - Ayurvedic AI Assistant',
       category: 'AI / ML',
       description: 'Clinical-grade AI assistant grounded in the Charaka Samhita using RAG with Sthana-weighted semantic reranking and diagnostic structure. Multilingual support (EN, HI, GU) with Safety Filters, Intent Classifiers, and PDF report generation.',
       tech: ['Python', 'Streamlit', 'LangChain', 'ChromaDB', 'Groq API (LLaMA 3 70B)', 'RAG'],

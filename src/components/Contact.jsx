@@ -75,6 +75,9 @@ export default function Contact() {
               rows="5"
               required
             ></textarea>
+            <div className="character-count">
+              {formData.message.length} characters
+            </div>
           </div>
 
           <button type="submit" className="submit-btn">
@@ -103,7 +106,7 @@ export default function Contact() {
             </li>
             <li>
               <strong>GitHub:</strong>{' '}
-              <a href="https://github.com" target="_blank" rel="noopener noreferrer">
+              <a href="https://github.com/tirthbhanderi2006" target="_blank" rel="noopener noreferrer">
                 github.com
               </a>
             </li>

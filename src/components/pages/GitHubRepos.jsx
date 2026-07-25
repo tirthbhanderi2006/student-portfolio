@@ -35,41 +35,42 @@ export default function GitHubRepos() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const fetchRepos = async () => {
+    setLoading(true);
+    setError(null);
+    setData(null);
 
-    async function fetchRepos() {
-      setLoading(true);
-      setError(null);
-      setData(null);
+    try {
+      const response = await fetch(API_URL, {
+        headers: { Accept: 'application/vnd.github+json' },
+      });
 
-      try {
-        const response = await fetch(API_URL, {
-          headers: { Accept: 'application/vnd.github+json' },
-        });
-
-        if (!response.ok) {
-          const msg =
-            response.status === 403
-              ? 'GitHub API rate limit exceeded. Please wait a minute and try again.'
-              : response.status === 404
-              ? `GitHub user "${GITHUB_USERNAME}" was not found.`
-              : `GitHub API responded with HTTP ${response.status}.`;
-          throw new Error(msg);
-        }
-
-        const json = await response.json();
-        if (!cancelled) setData(json);
-      } catch (err) {
-        if (!cancelled) setError(err.message || 'An unexpected error occurred.');
-      } finally {
-        if (!cancelled) setLoading(false);
+      if (!response.ok) {
+        const msg =
+          response.status === 403
+            ? 'GitHub API rate limit exceeded. Please wait a minute and try again.'
+            : response.status === 404
+            ? `GitHub user "${GITHUB_USERNAME}" was not found.`
+            : `GitHub API responded with HTTP ${response.status}.`;
+        throw new Error(msg);
       }
-    }
 
+      const json = await response.json();
+      setData(json);
+    } catch (err) {
+      setError(err.message || 'An unexpected error occurred.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchRepos();
-    return () => { cancelled = true; };
-  },[]);
+  }, []);
+
+  const handleRetry = () => {
+    fetchRepos();
+  };
 
 
   return (

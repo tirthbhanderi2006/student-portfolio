@@ -93,6 +93,11 @@ export default function Navbar({ theme, toggleTheme }) {
               </NavLink>
             </li>
             <li>
+              <NavLink to="/certificates" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                Certificates
+              </NavLink>
+            </li>
+            <li>
               <NavLink to="/contact" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
                 Contact
               </NavLink>

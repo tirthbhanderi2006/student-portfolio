@@ -1037,6 +1037,24 @@ main.content-container {
   font-size: 1.1rem;
   font-weight: 700;
   line-height: 1.3;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.repo-name-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 0.15rem 0.55rem;
+  vertical-align: middle;
 }
 
 .repo-name-link {
@@ -1154,9 +1172,207 @@ main.content-container {
   gap: 0.35rem;
 }
 
+/* Repository Search Filter */
+.repo-search-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.repo-search-input-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  align-items: center;
+}
+
+.repo-search-input-wrapper .search-icon {
+  position: absolute;
+  left: 1rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.repo-search-input {
+  width: 100%;
+  padding: 0.75rem 2.5rem 0.75rem 2.75rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.repo-search-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.search-clear-btn {
+  position: absolute;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.search-clear-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--border-color);
+}
+
 /* Retry button – icon + text inline */
 .retry-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  padding: 0.6rem 1.25rem;
+  background-color: var(--primary);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  margin-top: 1rem;
 }
+
+.retry-btn:hover {
+  background-color: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Certificates Page
+   ═══════════════════════════════════════════════════════════════ */
+
+.certs-section {
+  animation: fadeIn 0.4s ease-out;
+}
+
+.certs-header-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+  color: var(--primary);
+}
+
+.cert-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 3rem 0;
+}
+
+/* ── Vertical stack ── */
+.certs-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+/* ── Card = just the preview ── */
+.cert-card {
+  display: block;
+  width: 100%;
+  height: 650px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
+  position: relative;
+  background-color: var(--bg-secondary);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+  text-decoration: none;
+}
+
+.cert-card:hover {
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary);
+}
+
+/* ── Shimmer while PDF loads ── */
+.cert-preview-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    var(--border-color) 25%,
+    color-mix(in srgb, var(--border-color) 50%, var(--bg-primary)) 50%,
+    var(--border-color) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.6s infinite linear;
+}
+
+/* ── Skeleton placeholder ── */
+.cert-skeleton-card {
+  height: 650px;
+  background: linear-gradient(
+    90deg,
+    var(--border-color) 25%,
+    color-mix(in srgb, var(--border-color) 50%, var(--bg-primary)) 50%,
+    var(--border-color) 75%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.6s infinite linear;
+  cursor: default;
+}
+
+/* ── PDF iframe fills the card ── */
+.cert-preview-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+@keyframes shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+
+@media (max-width: 768px) {
+  .cert-card,
+  .cert-skeleton-card {
+    height: 480px;
+  }
+}
+
+@media (max-width: 480px) {
+  .cert-card,
+  .cert-skeleton-card {
+    height: 380px;
+  }
+}
+
+
+.certs-section {
+  animation: fadeIn 0.4s ease-out;
+}
+
+.certs-header-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+  color: var(--primary);
+}
+
+

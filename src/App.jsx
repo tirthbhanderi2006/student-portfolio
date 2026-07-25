@@ -7,6 +7,7 @@ import AboutMe from './components/pages/AboutMe';
 import Projects from './components/pages/Projects';
 import Contact from './components/pages/Contact';
 import GitHubRepos from './components/pages/GitHubRepos';
+import Certificates from './components/pages/Certificates';
 import NotFound from './components/layout/NotFound';
 
 function Layout({ theme, toggleTheme }) {
@@ -47,6 +48,7 @@ function App() {
           <Route index element={<Projects />} />
           <Route path="about" element={<AboutMe />} />
           <Route path="github" element={<GitHubRepos />} />
+          <Route path="certificates" element={<Certificates />} />
           <Route path="contact" element={<Contact />} />
           <Route path="*" element={<NotFound />} />
         </Route>

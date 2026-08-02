@@ -8,6 +8,8 @@ import Projects from './components/pages/Projects';
 import Contact from './components/pages/Contact';
 import GitHubRepos from './components/pages/GitHubRepos';
 import Certificates from './components/pages/Certificates';
+import TaskManager from './components/pages/TaskManager';
+import ApiExplorer from './components/pages/ApiExplorer';
 import NotFound from './components/layout/NotFound';
 
 function Layout({ theme, toggleTheme }) {
@@ -47,6 +49,8 @@ function App() {
         <Route path="/" element={<Layout theme={theme} toggleTheme={toggleTheme} />}>
           <Route index element={<Projects />} />
           <Route path="about" element={<AboutMe />} />
+          <Route path="tasks" element={<TaskManager />} />
+          <Route path="api-explorer" element={<ApiExplorer />} />
           <Route path="github" element={<GitHubRepos />} />
           <Route path="certificates" element={<Certificates />} />
           <Route path="contact" element={<Contact />} />

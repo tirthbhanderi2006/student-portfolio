@@ -98,6 +98,16 @@ export default function Navbar({ theme, toggleTheme }) {
               </NavLink>
             </li>
             <li>
+              <NavLink to="/tasks" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                Tasks API
+              </NavLink>
+            </li>
+            <li>
+              <NavLink to="/api-explorer" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+                API Explorer
+              </NavLink>
+            </li>
+            <li>
               <NavLink to="/contact" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
                 Contact
               </NavLink>

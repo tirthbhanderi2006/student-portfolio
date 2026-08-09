@@ -593,7 +593,7 @@ function HateoasSection() {
     setSelectedLink(null);
     setFollowedResponse(null);
     try {
-      const res = await fetch(`${API_BASE}/api/tasks`);
+      const res = await fetch(`${API_BASE}/api/tasks?links=true`);
       const data = await res.json();
       setLiveResponse(data);
     } catch {

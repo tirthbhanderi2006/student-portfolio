@@ -2,10 +2,26 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+import connectDB from './config/db.js';
+import Task from './models/Task.js';
+
+// Load environment variables from .env file
+dotenv.config();
+
+// Connect to MongoDB database
+connectDB();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const LOG_FILE = path.join(__dirname, 'logs/requests.log.csv');
+
+// Ensure log directory exists
+const logDir = path.dirname(LOG_FILE);
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+}
 
 if (!fs.existsSync(LOG_FILE)) {
   fs.writeFileSync(LOG_FILE, 'Timestamp,Method,URL,IP,StatusCode\n', 'utf8');
@@ -56,7 +72,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// 1. Request Logging Middleware (Console + CSV File)
+// Request Logging Middleware (Console + CSV File)
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   const ip = req.ip || req.socket.remoteAddress || '127.0.0.1';
@@ -70,33 +86,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// In-memory data store for tasks
-let tasks = [
-  {
-    id: 1,
-    title: 'Learn Node.js & Express',
-    description: 'Understand core Node modules, Express routing, and middleware',
-    completed: true,
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 2,
-    title: 'Build Task Management Backend',
-    description: 'Implement REST endpoints with logging and error handling',
-    completed: false,
-    createdAt: new Date().toISOString()
-  }
-];
-
-let nextId = 3;
-
-// Helper to find task by ID
-const findTaskById = (idParam) => {
-  const id = parseInt(idParam, 10);
-  if (isNaN(id)) return null;
-  return tasks.find((t) => t.id === id);
-};
-
 // HATEOAS: Build hypermedia links for a single task
 const buildTaskLinks = (req, taskId) => {
   const base = `${req.protocol}://${req.get('host')}`;
@@ -109,17 +98,27 @@ const buildTaskLinks = (req, taskId) => {
   };
 };
 
-// HATEOAS: Enrich a task object with _links
-const enrichTask = (req, task) => ({
-  ...task,
-  _links: buildTaskLinks(req, task.id)
-});
+// Helper to format task object with _id, id, and _links
+const cleanTask = (req, taskDoc) => {
+  if (!taskDoc) return null;
+  const taskObj = typeof taskDoc.toJSON === 'function' ? taskDoc.toJSON() : { ...taskDoc };
+  delete taskObj.__v;
+
+  const idVal = taskObj.id || (taskObj._id ? taskObj._id.toString() : '');
+  taskObj._id = idVal;
+  taskObj.id = idVal;
+
+  if (req) {
+    taskObj._links = buildTaskLinks(req, idVal);
+  }
+  return taskObj;
+};
 
 // Root endpoint
 app.get('/', (req, res) => {
   const base = `${req.protocol}://${req.get('host')}`;
   res.status(200).json({
-    message: 'Task Management API is running',
+    message: 'Task Management API is running (MongoDB / Mongoose)',
     _links: {
       self:    { href: `${base}/`,          method: 'GET' },
       api:     { href: `${base}/api`,       method: 'GET' },
@@ -134,8 +133,8 @@ app.get('/api', (req, res) => {
   const base = `${req.protocol}://${req.get('host')}`;
   res.status(200).json({
     name: 'Task Management REST API',
-    version: '1.0.0',
-    description: 'A RESTful API demonstrating Richardson Maturity Model Level 3 with HATEOAS',
+    version: '2.0.0',
+    description: 'A RESTful API powered by MongoDB & Mongoose',
     _links: {
       self:       { href: `${base}/api`,       method: 'GET' },
       tasks:      { href: `${base}/api/tasks`, method: 'GET',  description: 'List all tasks' },
@@ -144,139 +143,143 @@ app.get('/api', (req, res) => {
   });
 });
 
-// --- REST Endpoints for Tasks (Richardson Level 2 + Level 3 HATEOAS) ---
+// --- REST Endpoints for Tasks (Mongoose Model Operations) ---
 
-// GET /api/tasks - Read all tasks (200 OK)
-app.get(['/api/tasks', '/tasks'], (req, res) => {
-  const base = `${req.protocol}://${req.get('host')}`;
-  res.status(200).json({
-    count: tasks.length,
-    _links: {
-      self:   { href: `${base}/api/tasks`, method: 'GET' },
-      create: { href: `${base}/api/tasks`, method: 'POST' }
-    },
-    data: tasks.map(t => enrichTask(req, t))
-  });
-});
-
-// GET /api/tasks/:id - Read a single task by ID (200 OK or 404 Not Found)
-app.get(['/api/tasks/:id', '/tasks/:id'], (req, res, next) => {
+// GET /api/tasks - Read all tasks from MongoDB (200 OK)
+app.get(['/api/tasks', '/tasks'], async (req, res, next) => {
   try {
-    const task = findTaskById(req.params.id);
-    if (!task) {
-      return res.status(404).json({ error: `Task with ID ${req.params.id} not found` });
+    const tasks = await Task.find().sort({ createdAt: -1 });
+    const cleanedTasks = tasks.map(t => cleanTask(req, t));
+
+    if (req.query?.links === 'true' || req.query?.hateoas === 'true') {
+      const base = `${req.protocol}://${req.get('host')}`;
+      return res.status(200).json({
+        count: tasks.length,
+        _links: {
+          self:   { href: `${base}/api/tasks`, method: 'GET' },
+          create: { href: `${base}/api/tasks`, method: 'POST' }
+        },
+        data: cleanedTasks
+      });
     }
-    res.status(200).json(enrichTask(req, task));
+
+    res.status(200).json(cleanedTasks);
   } catch (err) {
     next(err);
   }
 });
 
-// POST /api/tasks - Create a new task (201 Created + Location header)
-app.post(['/api/tasks', '/tasks'], (req, res, next) => {
+// GET /api/tasks/:id - Read a single task by ObjectId (200 OK or 404 Not Found)
+app.get(['/api/tasks/:id', '/tasks/:id'], async (req, res, next) => {
   try {
-    const { title, description = '', completed = false } = req.body;
-
-    if (!title || typeof title !== 'string' || title.trim() === '') {
-      return res.status(400).json({ error: 'Title is required and must be a non-empty string' });
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(404).json({
+        success: false,
+        error: 'Not Found',
+        message: `Task with ID '${id}' not found`
+      });
     }
 
-    const newTask = {
-      id: nextId++,
-      title: title.trim(),
-      description: description.trim(),
-      completed: Boolean(completed),
-      createdAt: new Date().toISOString()
-    };
+    const task = await Task.findById(id);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        error: 'Not Found',
+        message: `Task with ID '${id}' not found`
+      });
+    }
+    res.status(200).json(cleanTask(req, task));
+  } catch (err) {
+    next(err);
+  }
+});
 
-    tasks.push(newTask);
+// POST /api/tasks - Create a new task in MongoDB (201 Created + Location header)
+app.post(['/api/tasks', '/tasks'], async (req, res, next) => {
+  try {
+    const { title, description, completed, priority } = req.body;
+
+    const newTask = await Task.create({
+      title,
+      description,
+      completed,
+      priority
+    });
 
     const base = `${req.protocol}://${req.get('host')}`;
-    res.setHeader('Location', `${base}/api/tasks/${newTask.id}`);
-    res.status(201).json(enrichTask(req, newTask));
+    res.setHeader('Location', `${base}/api/tasks/${newTask._id}`);
+    res.status(201).json(cleanTask(req, newTask));
   } catch (err) {
     next(err);
   }
 });
 
 // PUT /api/tasks/:id - Full update of an existing task (200 OK or 404 Not Found)
-app.put(['/api/tasks/:id', '/tasks/:id'], (req, res, next) => {
+app.put(['/api/tasks/:id', '/tasks/:id'], async (req, res, next) => {
   try {
-    const task = findTaskById(req.params.id);
-    if (!task) {
-      return res.status(404).json({ error: `Task with ID ${req.params.id} not found` });
+    const { title, description, completed, priority } = req.body;
+
+    const updatedTask = await Task.findByIdAndUpdate(
+      req.params.id,
+      { title, description, completed, priority },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedTask) {
+      return res.status(404).json({
+        success: false,
+        error: 'Not Found',
+        message: `Task with ID '${req.params.id}' not found`
+      });
     }
 
-    const { title, description, completed } = req.body;
-
-    if (title !== undefined) {
-      if (typeof title !== 'string' || title.trim() === '') {
-        return res.status(400).json({ error: 'Title must be a non-empty string' });
-      }
-      task.title = title.trim();
-    }
-
-    if (description !== undefined) {
-      task.description = String(description).trim();
-    }
-
-    if (completed !== undefined) {
-      task.completed = Boolean(completed);
-    }
-
-    task.updatedAt = new Date().toISOString();
-
-    res.status(200).json(enrichTask(req, task));
+    res.status(200).json(cleanTask(req, updatedTask));
   } catch (err) {
     next(err);
   }
 });
 
-// PATCH /api/tasks/:id - Partial update (200 OK or 404 Not Found)
-app.patch(['/api/tasks/:id', '/tasks/:id'], (req, res, next) => {
+// PATCH /api/tasks/:id - Partial update of a task (200 OK or 404 Not Found)
+app.patch(['/api/tasks/:id', '/tasks/:id'], async (req, res, next) => {
   try {
-    const task = findTaskById(req.params.id);
-    if (!task) {
-      return res.status(404).json({ error: `Task with ID ${req.params.id} not found` });
+    const updatedTask = await Task.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedTask) {
+      return res.status(404).json({
+        success: false,
+        error: 'Not Found',
+        message: `Task with ID '${req.params.id}' not found`
+      });
     }
 
-    const { title, description, completed } = req.body;
-
-    if (title !== undefined) {
-      if (typeof title !== 'string' || title.trim() === '') {
-        return res.status(400).json({ error: 'Title must be a non-empty string' });
-      }
-      task.title = title.trim();
-    }
-
-    if (description !== undefined) {
-      task.description = String(description).trim();
-    }
-
-    if (completed !== undefined) {
-      task.completed = Boolean(completed);
-    }
-
-    task.updatedAt = new Date().toISOString();
-
-    res.status(200).json(enrichTask(req, task));
+    res.status(200).json(cleanTask(req, updatedTask));
   } catch (err) {
     next(err);
   }
 });
 
-// DELETE /api/tasks/:id - Delete a task (200 OK or 404 Not Found)
-app.delete(['/api/tasks/:id', '/tasks/:id'], (req, res, next) => {
+// DELETE /api/tasks/:id - Delete a task from MongoDB (200 OK or 404 Not Found)
+app.delete(['/api/tasks/:id', '/tasks/:id'], async (req, res, next) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    const taskIndex = tasks.findIndex((t) => t.id === id);
+    const deletedTask = await Task.findByIdAndDelete(req.params.id);
 
-    if (taskIndex === -1) {
-      return res.status(404).json({ error: `Task with ID ${req.params.id} not found` });
+    if (!deletedTask) {
+      return res.status(404).json({
+        success: false,
+        error: 'Not Found',
+        message: `Task with ID '${req.params.id}' not found`
+      });
     }
 
-    const deletedTask = tasks.splice(taskIndex, 1)[0];
-    res.status(200).json({ message: 'Task deleted successfully', task: enrichTask(req, deletedTask) });
+    res.status(200).json({
+      message: 'Task deleted successfully',
+      task: cleanTask(req, deletedTask)
+    });
   } catch (err) {
     next(err);
   }
@@ -291,15 +294,50 @@ app.get('/api/error-test', (req, res, next) => {
 
 // 404 Handler for undefined routes
 app.use((req, res, next) => {
-  res.status(404).json({ error: `Route ${req.method} ${req.url} not found` });
+  res.status(404).json({
+    success: false,
+    error: 'Not Found',
+    message: `Route ${req.method} ${req.url} not found`
+  });
 });
 
-// 2. Global Error Handling Middleware
+// Global Error Handling Middleware (Structured JSON Error Responses)
 app.use((err, req, res, next) => {
-  console.error('Global Error Handler caught an error:', err.message || err);
+  console.error('[Error Handler Log]:', err.name, '-', err.message);
+
+  // Mongoose Schema Validation Errors (e.g. missing title)
+  if (err.name === 'ValidationError') {
+    const errors = {};
+    const details = [];
+    Object.keys(err.errors).forEach((key) => {
+      errors[key] = err.errors[key].message;
+      details.push({ field: key, message: err.errors[key].message });
+    });
+
+    return res.status(400).json({
+      success: false,
+      error: 'Validation Error',
+      message: 'Task validation failed',
+      errors,
+      details
+    });
+  }
+
+  // Mongoose CastError (e.g. invalid ObjectId format)
+  if (err.name === 'CastError') {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid ID Format',
+      message: `The provided ID '${err.value}' is not a valid MongoDB ObjectId`
+    });
+  }
+
+  // General server errors
   const statusCode = err.status || err.statusCode || 500;
   res.status(statusCode).json({
-    error: err.message || 'Internal Server Error',
+    success: false,
+    error: err.name || 'Internal Server Error',
+    message: err.message || 'An internal error occurred',
     status: statusCode
   });
 });

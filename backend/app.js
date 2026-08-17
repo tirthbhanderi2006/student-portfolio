@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
-import connectDB from './config/db.js';
+import connectDB from './config/db.config.js';
 import taskRoutes from './routes/taskRoutes.js';
 import firebaseTaskRoutes from './routes/firebaseTaskRoutes.js';
 

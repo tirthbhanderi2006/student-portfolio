@@ -17,7 +17,10 @@ backend/logs/
 
 # Environment variables
 .env
+.env.*
 .env*.local
+backend/.env
+backend/.env.*
 
 # Editor directories and files
 .vscode/*
@@ -29,3 +32,8 @@ backend/logs/
 *.njsproj
 *.sln
 *.sw?
+
+# Screenshots and tutorial capture scripts
+img/
+scripts/
+

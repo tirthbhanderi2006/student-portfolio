@@ -4,17 +4,20 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
-import connectDB from './config/db.js';
-import Task from './models/Task.js';
-
-// Load environment variables from .env file
-dotenv.config();
-
-// Connect to MongoDB database
-connectDB();
+import connectDB from './config/db.config.js';
+import taskRoutes from './routes/taskRoutes.js';
+import firebaseTaskRoutes from './routes/firebaseTaskRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Load environment variables from backend/.env and root .env
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config();
+
+// Connect to database (MongoDB or Firebase)
+connectDB();
 const LOG_FILE = path.join(__dirname, 'logs/requests.log.csv');
 
 // Ensure log directory exists
@@ -86,44 +89,18 @@ app.use((req, res, next) => {
   next();
 });
 
-// HATEOAS: Build hypermedia links for a single task
-const buildTaskLinks = (req, taskId) => {
-  const base = `${req.protocol}://${req.get('host')}`;
-  return {
-    self:       { href: `${base}/api/tasks/${taskId}`, method: 'GET' },
-    update:     { href: `${base}/api/tasks/${taskId}`, method: 'PUT' },
-    patch:      { href: `${base}/api/tasks/${taskId}`, method: 'PATCH' },
-    delete:     { href: `${base}/api/tasks/${taskId}`, method: 'DELETE' },
-    collection: { href: `${base}/api/tasks`,           method: 'GET' }
-  };
-};
-
-// Helper to format task object with _id, id, and _links
-const cleanTask = (req, taskDoc) => {
-  if (!taskDoc) return null;
-  const taskObj = typeof taskDoc.toJSON === 'function' ? taskDoc.toJSON() : { ...taskDoc };
-  delete taskObj.__v;
-
-  const idVal = taskObj.id || (taskObj._id ? taskObj._id.toString() : '');
-  taskObj._id = idVal;
-  taskObj.id = idVal;
-
-  if (req) {
-    taskObj._links = buildTaskLinks(req, idVal);
-  }
-  return taskObj;
-};
-
 // Root endpoint
 app.get('/', (req, res) => {
   const base = `${req.protocol}://${req.get('host')}`;
+  const activeDb = (process.env.DB_TYPE || 'mongo').toUpperCase();
   res.status(200).json({
-    message: 'Task Management API is running (MongoDB / Mongoose)',
+    message: `Task Management API is running (Active DB Provider: ${activeDb})`,
+    activeDatabase: process.env.DB_TYPE || 'mongo',
     _links: {
-      self:    { href: `${base}/`,          method: 'GET' },
-      api:     { href: `${base}/api`,       method: 'GET' },
-      tasks:   { href: `${base}/api/tasks`, method: 'GET' },
-      create:  { href: `${base}/api/tasks`, method: 'POST' }
+      self:   { href: `${base}/`,          method: 'GET' },
+      api:    { href: `${base}/api`,       method: 'GET' },
+      tasks:  { href: `${base}/api/tasks`, method: 'GET' },
+      create: { href: `${base}/api/tasks`, method: 'POST' }
     }
   });
 });
@@ -134,156 +111,23 @@ app.get('/api', (req, res) => {
   res.status(200).json({
     name: 'Task Management REST API',
     version: '2.0.0',
-    description: 'A RESTful API powered by MongoDB & Mongoose',
+    activeDatabase: process.env.DB_TYPE || 'mongo',
+    description: 'A RESTful API supporting dynamic switching between MongoDB & Firebase Firestore',
     _links: {
       self:       { href: `${base}/api`,       method: 'GET' },
-      tasks:      { href: `${base}/api/tasks`, method: 'GET',  description: 'List all tasks' },
+      tasks:      { href: `${base}/api/tasks`, method: 'GET',  description: 'Manage tasks for active DB' },
       createTask: { href: `${base}/api/tasks`, method: 'POST', description: 'Create a new task' }
     }
   });
 });
 
-// --- REST Endpoints for Tasks (Mongoose Model Operations) ---
+// --- Unified REST Endpoints for Tasks (Switches DB via DB_TYPE in .env) ---
+app.use('/api/tasks', taskRoutes);
+app.use('/tasks', taskRoutes);
 
-// GET /api/tasks - Read all tasks from MongoDB (200 OK)
-app.get(['/api/tasks', '/tasks'], async (req, res, next) => {
-  try {
-    const tasks = await Task.find().sort({ createdAt: -1 });
-    const cleanedTasks = tasks.map(t => cleanTask(req, t));
-
-    if (req.query?.links === 'true' || req.query?.hateoas === 'true') {
-      const base = `${req.protocol}://${req.get('host')}`;
-      return res.status(200).json({
-        count: tasks.length,
-        _links: {
-          self:   { href: `${base}/api/tasks`, method: 'GET' },
-          create: { href: `${base}/api/tasks`, method: 'POST' }
-        },
-        data: cleanedTasks
-      });
-    }
-
-    res.status(200).json(cleanedTasks);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// GET /api/tasks/:id - Read a single task by ObjectId (200 OK or 404 Not Found)
-app.get(['/api/tasks/:id', '/tasks/:id'], async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(404).json({
-        success: false,
-        error: 'Not Found',
-        message: `Task with ID '${id}' not found`
-      });
-    }
-
-    const task = await Task.findById(id);
-    if (!task) {
-      return res.status(404).json({
-        success: false,
-        error: 'Not Found',
-        message: `Task with ID '${id}' not found`
-      });
-    }
-    res.status(200).json(cleanTask(req, task));
-  } catch (err) {
-    next(err);
-  }
-});
-
-// POST /api/tasks - Create a new task in MongoDB (201 Created + Location header)
-app.post(['/api/tasks', '/tasks'], async (req, res, next) => {
-  try {
-    const { title, description, completed, priority } = req.body;
-
-    const newTask = await Task.create({
-      title,
-      description,
-      completed,
-      priority
-    });
-
-    const base = `${req.protocol}://${req.get('host')}`;
-    res.setHeader('Location', `${base}/api/tasks/${newTask._id}`);
-    res.status(201).json(cleanTask(req, newTask));
-  } catch (err) {
-    next(err);
-  }
-});
-
-// PUT /api/tasks/:id - Full update of an existing task (200 OK or 404 Not Found)
-app.put(['/api/tasks/:id', '/tasks/:id'], async (req, res, next) => {
-  try {
-    const { title, description, completed, priority } = req.body;
-
-    const updatedTask = await Task.findByIdAndUpdate(
-      req.params.id,
-      { title, description, completed, priority },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedTask) {
-      return res.status(404).json({
-        success: false,
-        error: 'Not Found',
-        message: `Task with ID '${req.params.id}' not found`
-      });
-    }
-
-    res.status(200).json(cleanTask(req, updatedTask));
-  } catch (err) {
-    next(err);
-  }
-});
-
-// PATCH /api/tasks/:id - Partial update of a task (200 OK or 404 Not Found)
-app.patch(['/api/tasks/:id', '/tasks/:id'], async (req, res, next) => {
-  try {
-    const updatedTask = await Task.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedTask) {
-      return res.status(404).json({
-        success: false,
-        error: 'Not Found',
-        message: `Task with ID '${req.params.id}' not found`
-      });
-    }
-
-    res.status(200).json(cleanTask(req, updatedTask));
-  } catch (err) {
-    next(err);
-  }
-});
-
-// DELETE /api/tasks/:id - Delete a task from MongoDB (200 OK or 404 Not Found)
-app.delete(['/api/tasks/:id', '/tasks/:id'], async (req, res, next) => {
-  try {
-    const deletedTask = await Task.findByIdAndDelete(req.params.id);
-
-    if (!deletedTask) {
-      return res.status(404).json({
-        success: false,
-        error: 'Not Found',
-        message: `Task with ID '${req.params.id}' not found`
-      });
-    }
-
-    res.status(200).json({
-      message: 'Task deleted successfully',
-      task: cleanTask(req, deletedTask)
-    });
-  } catch (err) {
-    next(err);
-  }
-});
+// Optional: Direct Firebase router mount if needed
+app.use('/api/firebase/tasks', firebaseTaskRoutes);
+app.use('/firebase/tasks', firebaseTaskRoutes);
 
 // Test endpoint for simulating internal server error (500 Internal Server Error)
 app.get('/api/error-test', (req, res, next) => {
